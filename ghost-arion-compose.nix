@@ -40,12 +40,11 @@ let
     database__client = cfg.database.client;
     database__connection__host = cfg.database.host;
     database__connection__user = cfg.database.user;
-    database__connection__password = 
-      if cfg.database.passwordFile != null then "$(cat /secrets/ghost-db-password)"
-      else cfg.database.password;
     database__connection__database = cfg.database.database;
     url = cfg.url;
     NODE_ENV = cfg.nodeEnv;
+  } // lib.optionalAttrs (cfg.database.passwordFile == null) {
+    database__connection__password = cfg.database.password;
   } // lib.optionalAttrs (cfg.mail.transport != null) {
     mail__transport = cfg.mail.transport;
   } // lib.optionalAttrs (cfg.mail.from != null) {
@@ -58,12 +57,8 @@ let
     mail__options__secure = if cfg.mail.smtp.secure then "true" else "false";
   } // lib.optionalAttrs (cfg.mail.smtp.user != null) {
     mail__options__auth__user = cfg.mail.smtp.user;
-  } // lib.optionalAttrs (cfg.mail.smtp.userFile != null) {
-    mail__options__auth__user = "$(cat /secrets/smtp-user)";
   } // lib.optionalAttrs (cfg.mail.smtp.password != null) {
     mail__options__auth__pass = cfg.mail.smtp.password;
-  } // lib.optionalAttrs (cfg.mail.smtp.passwordFile != null) {
-    mail__options__auth__pass = "$(cat /secrets/smtp-password)";
   };
 in
 {
@@ -81,6 +76,10 @@ in
         ] ++ secretVolumes;
         
         environment = ghostEnv;
+        
+        env_file = lib.optionals (cfg.database.passwordFile != null || cfg.mail.smtp.passwordFile != null || cfg.mail.smtp.userFile != null) [
+          "/run/ghost/env"
+        ];
         
         depends_on = {
           db = {
