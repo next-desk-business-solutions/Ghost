@@ -30,12 +30,19 @@ let
   # Use provided config or fallback to defaults
   cfg = defaultConfig // (if config != null then config else {});
   
+  # Volume mounts for secrets
+  secretVolumes = lib.optionals (cfg.database.passwordFile != null || cfg.mail.smtp.passwordFile != null || cfg.mail.smtp.userFile != null) [
+    "/run/agenix:/secrets:ro"
+  ];
+  
   # Build environment variables for Ghost
   ghostEnv = {
     database__client = cfg.database.client;
     database__connection__host = cfg.database.host;
     database__connection__user = cfg.database.user;
-    database__connection__password = cfg.database.password;
+    database__connection__password = 
+      if cfg.database.passwordFile != null then "$(cat /secrets/ghost-db-password)"
+      else cfg.database.password;
     database__connection__database = cfg.database.database;
     url = cfg.url;
     NODE_ENV = cfg.nodeEnv;
@@ -51,8 +58,12 @@ let
     mail__options__secure = if cfg.mail.smtp.secure then "true" else "false";
   } // lib.optionalAttrs (cfg.mail.smtp.user != null) {
     mail__options__auth__user = cfg.mail.smtp.user;
+  } // lib.optionalAttrs (cfg.mail.smtp.userFile != null) {
+    mail__options__auth__user = "$(cat /secrets/smtp-user)";
   } // lib.optionalAttrs (cfg.mail.smtp.password != null) {
     mail__options__auth__pass = cfg.mail.smtp.password;
+  } // lib.optionalAttrs (cfg.mail.smtp.passwordFile != null) {
+    mail__options__auth__pass = "$(cat /secrets/smtp-password)";
   };
 in
 {
@@ -67,7 +78,7 @@ in
         
         volumes = [
           "ghost-content:${cfg.contentPath}"
-        ];
+        ] ++ secretVolumes;
         
         environment = ghostEnv;
         
@@ -96,15 +107,18 @@ in
         
         volumes = [
           "db-data:/var/lib/mysql"
-        ];
+        ] ++ secretVolumes;
         
         environment = {
-          MYSQL_ROOT_PASSWORD = cfg.database.password;
           MYSQL_DATABASE = cfg.database.database;
-        };
+        } // (if cfg.database.passwordFile != null then {
+          MYSQL_ROOT_PASSWORD_FILE = "/secrets/ghost-db-password";
+        } else {
+          MYSQL_ROOT_PASSWORD = cfg.database.password;
+        });
         
         healthcheck = {
-          test = [ "CMD" "mysqladmin" "ping" "-h" "localhost" "-u" "root" "-p${cfg.database.password}" ];
+          test = [ "CMD" "mysqladmin" "ping" "-h" "localhost" "-u" "root" "-p${if cfg.database.passwordFile != null then "$(cat /secrets/ghost-db-password)" else cfg.database.password}" ];
           interval = "10s";
           timeout = "5s";
           retries = 5;
