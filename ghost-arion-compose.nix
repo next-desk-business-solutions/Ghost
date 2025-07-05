@@ -30,17 +30,12 @@ let
   # Use provided config or fallback to defaults
   cfg = defaultConfig // (if config != null then config else {});
   
-  # Helper function to read file content at runtime
-  readSecret = file: if file != null then "$(cat ${file})" else null;
-  
   # Build environment variables for Ghost
   ghostEnv = {
     database__client = cfg.database.client;
     database__connection__host = cfg.database.host;
     database__connection__user = cfg.database.user;
-    database__connection__password = 
-      if cfg.database.passwordFile != null then readSecret cfg.database.passwordFile
-      else cfg.database.password;
+    database__connection__password = cfg.database.password;
     database__connection__database = cfg.database.database;
     url = cfg.url;
     NODE_ENV = cfg.nodeEnv;
@@ -56,12 +51,8 @@ let
     mail__options__secure = if cfg.mail.smtp.secure then "true" else "false";
   } // lib.optionalAttrs (cfg.mail.smtp.user != null) {
     mail__options__auth__user = cfg.mail.smtp.user;
-  } // lib.optionalAttrs (cfg.mail.smtp.userFile != null) {
-    mail__options__auth__user = readSecret cfg.mail.smtp.userFile;
   } // lib.optionalAttrs (cfg.mail.smtp.password != null) {
     mail__options__auth__pass = cfg.mail.smtp.password;
-  } // lib.optionalAttrs (cfg.mail.smtp.passwordFile != null) {
-    mail__options__auth__pass = readSecret cfg.mail.smtp.passwordFile;
   };
 in
 {
@@ -108,14 +99,12 @@ in
         ];
         
         environment = {
-          MYSQL_ROOT_PASSWORD = 
-            if cfg.database.passwordFile != null then readSecret cfg.database.passwordFile
-            else cfg.database.password;
+          MYSQL_ROOT_PASSWORD = cfg.database.password;
           MYSQL_DATABASE = cfg.database.database;
         };
         
         healthcheck = {
-          test = [ "CMD" "mysqladmin" "ping" "-h" "localhost" "-u" "root" "-p${if cfg.database.passwordFile != null then readSecret cfg.database.passwordFile else cfg.database.password}" ];
+          test = [ "CMD" "mysqladmin" "ping" "-h" "localhost" "-u" "root" "-p${cfg.database.password}" ];
           interval = "10s";
           timeout = "5s";
           retries = 5;
