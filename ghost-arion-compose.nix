@@ -88,7 +88,7 @@ in
         };
         
         healthcheck = {
-          test = [ "CMD" "wget" "--no-verbose" "--tries=1" "--spider" "http://localhost:2368/ghost/api/v4/admin/site/" ];
+          test = [ "CMD" "nc" "-z" "localhost" "2368" ];
           interval = "30s";
           timeout = "10s";
           retries = 5;
